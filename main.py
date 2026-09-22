@@ -11,7 +11,7 @@ st.set_page_config(
     page_title="용돈 기입장 💲", page_icon="💲", layout="wide"
 )
 
-# 세션 상태에 기본 데이터프레임 초기화 (고유 ID 추가)
+# 세션 상태에 기본 데이터프레임 초기화
 if "df" not in st.session_state:
     st.session_state.df = pd.DataFrame(
         {
@@ -58,7 +58,6 @@ if action == "📝 내역 추가":
         elif amount_input <= 0:
             st.sidebar.error("금액을 0원 이상 입력해 주세요.")
         else:
-            # 새로운 고유 ID 생성
             new_id = (
                 st.session_state.df["ID"].max() + 1
                 if not st.session_state.df.empty
@@ -85,7 +84,6 @@ if action == "📝 내역 추가":
 elif action == "✏️ 내역 수정":
     st.sidebar.subheader("기존 내역 수정")
     if not st.session_state.df.empty:
-        # 수정할 항목 선택
         edit_options = st.session_state.df.apply(
             lambda r: f"[{r['ID']}] {r['날짜']} | {r['유형']} | {r['카테고리']} | {r['금액']:,}원 ({r['내역']})",
             axis=1,
@@ -145,14 +143,14 @@ elif action == "🗑️ 내역 삭제":
         st.sidebar.info("삭제할 내역이 없습니다.")
 
 # -----------------------------------------------------------------------------
-# 3. 메인 화면: 탭 구성 (내역 목록, 차트 분석, 요약 및 캘린더)
+# 3. 메인 화면: 탭 구성
 # -----------------------------------------------------------------------------
 tab1, tab2, tab3 = st.tabs(
     ["📋 전체 내역 목록", "📊 수입/지출 분석 차트", "📅 이달의 요약 & 캘린더"]
 )
 
 # -----------------------------------------------------------------------------
-# [TAB 1] 전체 내역 목록 (유형만 파란색/빨간색)
+# [TAB 1] 전체 내역 목록
 # -----------------------------------------------------------------------------
 with tab1:
     st.subheader("전체 거래 내역")
@@ -178,9 +176,9 @@ with tab1:
 
     def highlight_type_only(val):
         if val == "수입":
-            return "color: #3182CE; font-weight: bold;"  # 파란색
+            return "color: #3182CE; font-weight: bold;"
         elif val == "지출":
-            return "color: #E53E3E; font-weight: bold;"  # 빨간색
+            return "color: #E53E3E; font-weight: bold;"
         return ""
 
     styled_df = sorted_df.style.map(
@@ -255,14 +253,13 @@ with tab2:
         st.info("차트를 표시할 데이터가 없습니다.")
 
 # -----------------------------------------------------------------------------
-# [TAB 3] 이달의 요약 & 한눈에 보는 월별/일별 캘린더
+# [TAB 3] 이달의 요약 & 예쁜 월별 캘린더 (디자인 개선)
 # -----------------------------------------------------------------------------
 with tab3:
     st.subheader("📅 이달의 수입/지출 요약 & 월별 캘린더")
 
     today = datetime.date.today()
 
-    # 연도 및 월 선택
     col_sel1, col_sel2 = st.columns(2)
     with col_sel1:
         selected_year = st.number_input("연도 선택", value=today.year, step=1)
@@ -277,7 +274,7 @@ with tab3:
     )
     this_month_df = st.session_state.df.loc[month_mask]
 
-    # --- 1. 누적 요약 및 최다 항목 분석 ---
+    # --- 1. 요약 정보 ---
     st.divider()
     if not this_month_df.empty:
         m_income = this_month_df[this_month_df["유형"] == "수입"]["금액"].sum()
@@ -315,15 +312,14 @@ with tab3:
     else:
         st.info("선택한 달에 기록된 내역이 없습니다.")
 
-    # --- 2. 크게 보는 월별/일별 캘린더 뷰 ---
+    # --- 2. 깔끔한 디자인의 캘린더 UI ---
     st.divider()
-    st.subheader(f"🗓️ {selected_year}년 {selected_month}월 한눈에 보는 일별 캘린더")
+    st.subheader(f"🗓️ {selected_year}년 {selected_month}월 캘린더")
 
-    # 달력 틀 데이터 생성 (calendar 모듈 활용)
-    cal = calendar.Calendar(firstweekday=6) # 일요일부터 시작
+    cal = calendar.Calendar(firstweekday=6)  # 일요일 시작
     month_days = cal.monthdayscalendar(selected_year, selected_month)
 
-    # 일별 금액 합계 집계
+    # 일별 금액 집계
     daily_summary = {}
     for day in range(1, 32):
         d_str = f"{selected_year}-{selected_month:02d}-{day:02d}"
@@ -333,31 +329,95 @@ with tab3:
         if inc > 0 or exp > 0:
             daily_summary[day] = {"수입": inc, "지출": exp}
 
-    # 요일 헤더 표시
-    days_header = ["일", "월", "화", "수", "목", "금", "토"]
-    cols = st.columns(7)
-    for idx, day_name in enumerate(days_header):
-        cols[idx].markdown(f"<h4 style='text-align: center;'>{day_name}</h4>", unsafe_allow_html=True)
+    # Custom CSS 스타일 적용
+    st.markdown(
+        """
+        <style>
+        .calendar-header {
+            text-align: center;
+            font-weight: bold;
+            padding: 8px 0;
+            background-color: #f7f9fa;
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        .sun-header { color: #E53E3E; }
+        .sat-header { color: #3182CE; }
+        .calendar-card {
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 10px;
+            min-height: 110px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            margin-bottom: 8px;
+        }
+        .today-badge {
+            background-color: #3182CE;
+            color: white;
+            border-radius: 50%;
+            padding: 2px 7px;
+            font-size: 0.85rem;
+        }
+        .income-badge {
+            color: #3182CE;
+            background-color: #EBF8FF;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.82rem;
+            display: inline-block;
+            margin-top: 4px;
+        }
+        .expense-badge {
+            color: #E53E3E;
+            background-color: #FFF5F5;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.82rem;
+            display: inline-block;
+            margin-top: 4px;
+        }
+        </style>
+    """,
+        unsafe_allow_html=True,
+    )
 
-    # 주별 날짜 및 수입/지출 카드 생성
+    # 요일 헤더
+    days_header = [("일", "sun-header"), ("월", ""), ("화", ""), ("수", ""), ("목", ""), ("금", ""), ("토", "sat-header")]
+    cols = st.columns(7)
+    for idx, (d_name, d_class) in enumerate(days_header):
+        cols[idx].markdown(
+            f"<div class='calendar-header {d_class}'>{d_name}</div>",
+            unsafe_allow_html=True,
+        )
+
+    # 주별 날짜 출력
     for week in month_days:
         cols = st.columns(7)
         for idx, day in enumerate(week):
             if day == 0:
-                cols[idx].write("") # 해당 월이 아닌 빈 날짜
+                cols[idx].write("")
             else:
-                cell_html = f"<div style='border: 1px solid #ddd; padding: 8px; border-radius: 5px; min-height: 100px;'>"
-                cell_html += f"<b>{day}일</b><br>"
+                is_today = (
+                    selected_year == today.year
+                    and selected_month == today.month
+                    and day == today.day
+                )
+                
+                day_html = f"<span class='today-badge'>{day}</span>" if is_today else f"<b>{day}</b>"
+                
+                card_html = f"<div class='calendar-card'>{day_html}<br>"
 
                 if day in daily_summary:
                     inc = daily_summary[day]["수입"]
                     exp = daily_summary[day]["지출"]
 
-                    # 수입은 파란색, 지출은 빨간색으로 표기
                     if inc > 0:
-                        cell_html += f"<span style='color: #3182CE; font-weight: bold;'>+ {inc:,}원</span><br>"
+                        card_html += f"<div class='income-badge'>+ {inc:,}원</div><br>"
                     if exp > 0:
-                        cell_html += f"<span style='color: #E53E3E; font-weight: bold;'>- {exp:,}원</span><br>"
+                        card_html += f"<div class='expense-badge'>- {exp:,}원</div><br>"
 
-                cell_html += "</div>"
-                cols[idx].markdown(cell_html, unsafe_allow_html=True)
+                card_html += "</div>"
+                cols[idx].markdown(card_html, unsafe_allow_html=True)
