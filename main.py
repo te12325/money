@@ -1,15 +1,42 @@
 import datetime
-import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from streamlit_calendar import calendar
 
 # -----------------------------------------------------------------------------
 # 1. 페이지 기본 설정 및 세션 상태(데이터 저장소) 초기화
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="나의 용돈기입장", page_icon="💰", layout="wide"
+)
+
+# 파스텔 색상 목록 정의 (이름: HEX 색상코드)
+PASTEL_COLORS = {
+    "기본 (화이트)": "#FFFFFF",
+    "파스텔 핑크": "#FFD1DC",
+    "파스텔 블루": "#AEC6CF",
+    "파스텔 그린": "#B2AC88",
+    "파스텔 옐로우": "#FDFD96",
+    "파스텔 퍼플": "#C3B1E1",
+    "파스텔 피치": "#FFDAB9",
+}
+
+# 사이드바에 배경색 선택 드롭다운 박스 생성
+selected_color_name = st.sidebar.selectbox(
+    "🎨 배경 스타일 선택 (파스텔)", list(PASTEL_COLORS.keys())
+)
+bg_color = PASTEL_COLORS[selected_color_name]
+
+# 선택한 파스텔 배경색을 앱 전체 스타일(CSS)에 적용
+st.markdown(
+    f"""
+    <style>
+    .stApp {{
+        background-color: {bg_color};
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
 # 앱이 새로고침되어도 데이터가 유지되도록 Session State에 기본 데이터프레임 생성
@@ -33,6 +60,7 @@ st.write("수입과 지출을 기록하고 한눈에 관리해보세요!")
 # -----------------------------------------------------------------------------
 # 2. 사이드바: 새로운 내역 입력 폼
 # -----------------------------------------------------------------------------
+st.sidebar.divider()
 st.sidebar.header("📝 내역 추가하기")
 
 with st.sidebar.form("entry_form", clear_on_submit=True):
@@ -81,10 +109,10 @@ if submit_button:
         st.sidebar.error("금액을 0원 이상 입력해 주세요.")
 
 # -----------------------------------------------------------------------------
-# 3. 메인 화면: 탭 구성 (내역 목록, 차트 분석, 월별 캘린더)
+# 3. 메인 화면: 탭 구성 (내역 목록, 차트 분석, 월별/일별 조회)
 # -----------------------------------------------------------------------------
 tab1, tab2, tab3 = st.tabs(
-    ["📋 전체 내역 목록", "📊 수입/지출 분석 차트", "📅 월별 캘린더"]
+    ["📋 전체 내역 목록", "📊 수입/지출 분석 차트", "📅 날짜별 상세 조회"]
 )
 
 # -----------------------------------------------------------------------------
@@ -183,40 +211,34 @@ with tab2:
         st.info("차트를 표시할 데이터가 없습니다.")
 
 # -----------------------------------------------------------------------------
-# [TAB 3] 캘린더뷰 (streamlit-calendar 활용)
+# [TAB 3] 날짜별 상세 조회 (기본 Streamlit 컴포넌트 활용)
 # -----------------------------------------------------------------------------
 with tab3:
-    st.subheader("한눈에 보는 월별 캘린더")
+    st.subheader("특정 기간 내역 조회")
 
-    # 캘린더에 표시할 이벤트 데이터 형식 변환
-    calendar_events = []
-    for _, row in st.session_state.df.iterrows():
-        # 수입은 파란색 계열, 지출은 빨간색 계열로 구분
-        color = "#28a745" if row["유형"] == "수입" else "#dc3545"
-        prefix = "+" if row["유형"] == "수입" else "-"
+    # 조회할 기간 선택
+    col_date1, col_date2 = st.columns(2)
+    with col_date1:
+        start_date = st.date_input("시작일", datetime.date.today().replace(day=1))
+    with col_date2:
+        end_date = st.date_input("종료일", datetime.date.today())
 
-        event = {
-            "title": f"[{row['유형']}] {row['내역']} ({prefix}{row['금액']:,}원)",
-            "start": str(row["날짜"]),
-            "end": str(row["날짜"]),
-            "color": color,
-        }
-        calendar_events.append(event)
-
-    # FullCalendar 옵션 설정
-    calendar_options = {
-        "headerToolbar": {
-            "left": "prev,next today",
-            "center": "title",
-            "right": "dayGridMonth,timeGridWeek",
-        },
-        "initialView": "dayGridMonth",
-        "locale": "ko",
-    }
-
-    # 캘린더 컴포넌트 출력
-    calendar(
-        events=calendar_events,
-        options=calendar_options,
-        key="money_calendar",
+    # 선택한 날짜에 맞춰 데이터 필터링
+    mask = (st.session_state.df["날짜"] >= start_date) & (
+        st.session_state.df["날짜"] <= end_date
     )
+    filtered_df = st.session_state.df.loc[mask]
+
+    st.divider()
+
+    if not filtered_df.empty:
+        selected_income = filtered_df[filtered_df["유형"] == "수입"]["금액"].sum()
+        selected_expense = filtered_df[filtered_df["유형"] == "지출"]["금액"].sum()
+
+        st.write(f"**선택 기간 총 수입:** {selected_income:,}원 | **총 지출:** {selected_expense:,}원")
+        st.dataframe(
+            filtered_df.sort_values(by="날짜", ascending=False).reset_index(drop=True),
+            use_container_width=True,
+        )
+    else:
+        st.info("해당 기간에 기록된 내역이 없습니다.")
