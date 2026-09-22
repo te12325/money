@@ -17,11 +17,12 @@ if "df" not in st.session_state:
             "날짜": [
                 datetime.date.today(),
                 datetime.date.today() - datetime.timedelta(days=2),
+                datetime.date.today() - datetime.timedelta(days=5),
             ],
-            "유형": ["수입", "지출"],
-            "카테고리": ["용돈", "간식비"],
-            "금액": [50000, 8000],
-            "내역": ["부모님 용돈", "편의점 이용"],
+            "유형": ["수입", "지출", "지출"],
+            "카테고리": ["용돈", "간식비", "교통비"],
+            "금액": [100000, 8000, 15000],
+            "내역": ["부모님 용돈", "편의점 이용", "버스/지하철 충전"],
         }
     )
 
@@ -29,7 +30,7 @@ st.title("💰 나의 스마트 용돈기입장")
 st.write("수입과 지출을 기록하고 한눈에 관리해보세요!")
 
 # -----------------------------------------------------------------------------
-# 2. 사이드바: 새로운 내역 입력 폼 (카테고리 직접 입력 지원)
+# 2. 사이드바: 새로운 내역 입력 폼
 # -----------------------------------------------------------------------------
 st.sidebar.header("📝 내역 추가하기")
 
@@ -37,7 +38,6 @@ with st.sidebar.form("entry_form", clear_on_submit=True):
     date_input = st.date_input("날짜 선택", datetime.date.today())
     type_input = st.radio("유형 선택", ["지출", "수입"], horizontal=True)
 
-    # 드롭다운 대신 사용자가 직접 카테고리를 작성할 수 있는 텍스트 입력창
     category_input = st.text_input(
         "카테고리 직접 입력", placeholder="예: 간식비, 택시비, 알바비 등"
     )
@@ -73,14 +73,14 @@ if submit_button:
         st.sidebar.success("성공적으로 저장되었습니다!")
 
 # -----------------------------------------------------------------------------
-# 3. 메인 화면: 탭 구성 (내역 목록, 차트 분석, 날짜별 상세 조회)
+# 3. 메인 화면: 탭 구성 (내역 목록, 차트 분석, 이번 달 요약)
 # -----------------------------------------------------------------------------
 tab1, tab2, tab3 = st.tabs(
-    ["📋 전체 내역 목록", "📊 수입/지출 분석 차트", "📅 날짜별 상세 조회"]
+    ["📋 전체 내역 목록", "📊 수입/지출 분석 차트", "🏆 이달의 수입/지출 요약"]
 )
 
 # -----------------------------------------------------------------------------
-# [TAB 1] 전체 내역 목록 및 요약 (수입: 파란색, 지출: 빨간색 하이라이트)
+# [TAB 1] 전체 내역 목록 (유형 컬럼만 파란색/빨간색, 나머지는 검정색)
 # -----------------------------------------------------------------------------
 with tab1:
     st.subheader("전체 거래 내역")
@@ -94,10 +94,10 @@ with tab1:
     ]["금액"].sum()
     balance = total_income - total_expense
 
-    # 요약지표 표시 (수입: 기본/파란색 톤, 지출: 빨간색 delta 적용)
+    # 요약지표 표시
     col1, col2, col3 = st.columns(3)
-    col1.metric("총 수입 (파랑)", f"{total_income:,} 원")
-    col2.metric("총 지출 (빨강)", f"{total_expense:,} 원", delta=f"-{total_expense:,} 원", delta_color="inverse")
+    col1.metric("총 수입", f"{total_income:,} 원")
+    col2.metric("총 지출", f"{total_expense:,} 원")
     col3.metric("현재 잔액", f"{balance:,} 원")
 
     st.divider()
@@ -107,19 +107,22 @@ with tab1:
         by="날짜", ascending=False
     ).reset_index(drop=True)
 
-    # 수입(파란색), 지출(빨간색) 텍스트 색상 스타일 적용 함수
-    def highlight_type(row):
-        if row["유형"] == "수입":
-            return ["color: #3182CE; font-weight: bold;"] * len(row)
-        elif row["유형"] == "지출":
-            return ["color: #E53E3E; font-weight: bold;"] * len(row)
-        return [""] * len(row)
+    # '유형' 컬럼만 수입=파란색, 지출=빨간색으로 설정하는 스타일 함수
+    def highlight_type_only(val):
+        if val == "수입":
+            return "color: #3182CE; font-weight: bold;"
+        elif val == "지출":
+            return "color: #E53E3E; font-weight: bold;"
+        return ""
 
-    styled_df = sorted_df.style.apply(highlight_type, axis=1).format({"금액": "{:,} 원"})
+    styled_df = sorted_df.style.map(
+        highlight_type_only, subset=["유형"]
+    ).format({"금액": "{:,} 원"})
+    
     st.dataframe(styled_df, use_container_width=True)
 
 # -----------------------------------------------------------------------------
-# [TAB 2] 수입/지출 시각화 차트 (파란색/빨간색 테마 적용)
+# [TAB 2] 수입/지출 시각화 차트
 # -----------------------------------------------------------------------------
 with tab2:
     st.subheader("수입 및 지출 분석")
@@ -127,7 +130,7 @@ with tab2:
     if not st.session_state.df.empty:
         col_chart1, col_chart2 = st.columns(2)
 
-        # 1. 지출 카테고리별 원형 차트 (빨간색 계열)
+        # 1. 지출 카테고리별 원형 차트
         with col_chart1:
             expense_df = st.session_state.df[
                 st.session_state.df["유형"] == "지출"
@@ -145,7 +148,7 @@ with tab2:
             else:
                 st.info("지출 내역이 없습니다.")
 
-        # 2. 수입 카테고리별 원형 차트 (파란색 계열)
+        # 2. 수입 카테고리별 원형 차트
         with col_chart2:
             income_df = st.session_state.df[
                 st.session_state.df["유형"] == "수입"
@@ -165,7 +168,7 @@ with tab2:
 
         st.divider()
 
-        # 3. 일자별 수입/지출 막대 차트 (수입: 파란색 #3182CE, 지출: 빨간색 #E53E3E)
+        # 3. 일자별 수입/지출 막대 차트 (수입: 파란색, 지출: 빨간색)
         st.subheader("일자별 수입 및 지출 추이")
         daily_df = (
             st.session_state.df.groupby(["날짜", "유형"])["금액"]
@@ -187,39 +190,89 @@ with tab2:
         st.info("차트를 표시할 데이터가 없습니다.")
 
 # -----------------------------------------------------------------------------
-# [TAB 3] 날짜별 상세 조회
+# [TAB 3] 이달의 누적 수입/지출 및 최대 항목 분석
 # -----------------------------------------------------------------------------
 with tab3:
-    st.subheader("특정 기간 내역 조회")
+    st.subheader("📅 이번 달 누적 분석 & 최다 항목")
 
-    col_date1, col_date2 = st.columns(2)
-    with col_date1:
-        start_date = st.date_input("시작일", datetime.date.today().replace(day=1))
-    with col_date2:
-        end_date = st.date_input("종료일", datetime.date.today())
+    # 오늘 기준 이번 달 데이터만 필터링
+    today = datetime.date.today()
+    df_copy = st.session_state.df.copy()
+    df_copy["날짜"] = pd.to_datetime(df_copy["날짜"])
 
-    # 선택 기간 필터링
-    mask = (st.session_state.df["날짜"] >= start_date) & (
-        st.session_state.df["날짜"] <= end_date
+    month_mask = (df_copy["날짜"].dt.year == today.year) & (
+        df_copy["날짜"].dt.month == today.month
     )
-    filtered_df = st.session_state.df.loc[mask]
+    this_month_df = st.session_state.df.loc[month_mask]
 
-    st.divider()
+    if not this_month_df.empty:
+        # 이번 달 누적 수입 / 지출
+        m_income = this_month_df[this_month_df["유형"] == "수입"]["금액"].sum()
+        m_expense = this_month_df[this_month_df["유형"] == "지출"]["금액"].sum()
 
-    if not filtered_df.empty:
-        selected_income = filtered_df[filtered_df["유형"] == "수입"]["금액"].sum()
-        selected_expense = filtered_df[filtered_df["유형"] == "지출"]["금액"].sum()
+        col_m1, col_m2 = st.columns(2)
+        col_m1.metric(f"{today.month}월 누적 수입", f"{m_income:,} 원")
+        col_m2.metric(f"{today.month}월 누적 지출", f"{m_expense:,} 원")
 
-        st.write(
-            f"**선택 기간 총 수입:** <span style='color:#3182CE;'>{selected_income:,}원</span> | "
-            f"**총 지출:** <span style='color:#E53E3E;'>{selected_expense:,}원</span>",
-            unsafe_allow_html=True,
-        )
+        st.divider()
 
-        sorted_filtered = filtered_df.sort_values(
-            by="날짜", ascending=False
-        ).reset_index(drop=True)
-        styled_filtered = sorted_filtered.style.apply(highlight_type, axis=1).format({"금액": "{:,} 원"})
-        st.dataframe(styled_filtered, use_container_width=True)
+        col_top1, col_top2 = st.columns(2)
+
+        # 가장 돈을 많이 쓴 카테고리 및 내역 구하기
+        with col_top1:
+            st.markdown("### 🔴 어디에 가장 많이 썼을까?")
+            m_expense_df = this_month_df[this_month_df["유형"] == "지출"]
+
+            if not m_expense_df.empty:
+                # 1. 가장 지출이 컸던 카테고리
+                top_cat_exp = (
+                    m_expense_df.groupby("카테고리")["금액"]
+                    .sum()
+                    .idxmax()
+                )
+                top_cat_exp_amt = m_expense_df.groupby("카테고리")["금액"].sum().max()
+
+                # 2. 가장 지출이 컸던 단일 내역
+                max_exp_row = m_expense_df.loc[m_expense_df["금액"].idxmax()]
+
+                st.info(
+                    f"**가장 지출이 많은 카테고리:**\n\n"
+                    f"👉 **{top_cat_exp}** ({top_cat_exp_amt:,}원)"
+                )
+                st.warning(
+                    f"**가장 큰 단일 지출 내역:**\n\n"
+                    f"👉 **{max_exp_row['내역']}** ({max_exp_row['금액']:,}원 / {max_exp_row['카테고리']})"
+                )
+            else:
+                st.write("이번 달 지출 내역이 없습니다.")
+
+        # 가장 돈을 많이 번 카테고리 및 내역 구하기
+        with col_top2:
+            st.markdown("### 🔵 어디서 가장 많이 들어왔을까?")
+            m_income_df = this_month_df[this_month_df["유형"] == "수입"]
+
+            if not m_income_df.empty:
+                # 1. 가장 수입이 컸던 카테고리
+                top_cat_inc = (
+                    m_income_df.groupby("카테고리")["금액"]
+                    .sum()
+                    .idxmax()
+                )
+                top_cat_inc_amt = m_income_df.groupby("카테고리")["금액"].sum().max()
+
+                # 2. 가장 수입이 컸던 단일 내역
+                max_inc_row = m_income_df.loc[m_income_df["금액"].idxmax()]
+
+                st.info(
+                    f"**가장 수입이 많은 카테고리:**\n\n"
+                    f"👉 **{top_cat_inc}** ({top_cat_inc_amt:,}원)"
+                )
+                st.warning(
+                    f"**가장 큰 단일 수입 내역:**\n\n"
+                    f"👉 **{max_inc_row['내역']}** ({max_inc_row['금액']:,}원 / {max_inc_row['카테고리']})"
+                )
+            else:
+                st.write("이번 달 수입 내역이 없습니다.")
+
     else:
-        st.info("해당 기간에 기록된 내역이 없습니다.")
+        st.info("이번 달에 등록된 내역이 없습니다.")
